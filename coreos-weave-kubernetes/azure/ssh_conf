@@ -1,0 +1,29 @@
+Host *
+	User core
+	Compression yes
+	LogLevel FATAL
+	StrictHostKeyChecking no
+	UserKnownHostsFile /dev/null
+	IdentitiesOnly yes
+	IdentityFile ./cert/ssh.key
+
+
+Host azure-prd-01
+	Hostname cluster-01.cloudapp.net
+	Port 2201
+
+Host azure-prd-02
+	Hostname cluster-01.cloudapp.net
+	Port 2202
+
+Host azure-prd-03
+	Hostname cluster-02.cloudapp.net
+	Port 2203
+
+Host azure-prd-04
+	Hostname cluster-02.cloudapp.net
+	Port 2204
+
+
+
+

@@ -1,0 +1,82 @@
+#deploy-config
+
+name: "cluster-01"
+
+ssh_key:
+  key: "../cert/ssh.key"
+  pem: "../cert/ssh.pem"
+
+account:
+  login:
+    user: "USER@DOMAIN.onmicrosoft.com"
+    password: "PASSWORD"
+  subscription:
+    id: "123145321532512341234"
+    publish_file: "../conf/azure/cluster-01.publishsettings"
+    name: "BizSpark"
+    user:
+      - name: "USER@DOMAIN.onmicrosoft.com"
+        password: "PASSWORD"
+        type: "user"
+
+  affinity_group:
+    name: "cluster-01-ag"
+    label: "cluster-01-ag"
+    location: "West Europe"
+
+storage:
+  account:
+    name: "clusterstorage"
+    label: "clusterstorage"
+    affinity_group: "cluster-01-ag"
+    location: "West Europe"
+    type: "LRS"
+
+network:
+  vnet:
+    name: "clustervnet"
+    address_space: "172.16.1.0"
+    cidr: "24"
+    location: "West Europe"
+    affinity_group: "cluster-01-ag"
+
+  reserved_ip:
+    name: "cluster-01-ip"
+    label: "cluster-01-ip"
+    location: "West Europe"
+
+virtual_machines:
+  - name: "azure-prd-01"
+    image: "2b171e93f07c4903bcad35bda10acf22__CoreOS-Beta-723.3.0"
+    size: "Standard_D1"
+    service: "cluster-01"
+    location: "West Europe"
+    affinity_group: "cluster-01-ag"
+    ssh_port: "2201"
+    ssh_cert: "../cert/ssh.pem"
+    vnet: "clustervnet"
+    ip: "172.16.1.10"
+    reserved_ip: "cluster-01-ip"
+    custom_data: "../conf/coreos/cluster-01.yaml"
+
+    endpoints:
+      - name: "Weave-TCP"
+        port: "6783"
+        protocol: "TCP"
+
+      - name: "Weave-UDP"
+        port: "6783"
+        protocol: "UDP"
+
+  - name: "azure-prd-02"
+    image: "2b171e93f07c4903bcad35bda10acf22__CoreOS-Beta-723.3.0"
+    size: "Standard_D1"
+    service: "cluster-01"
+    location: "West Europe"
+    affinity_group: "cluster-01-ag"
+    ssh_port: "2202"
+    ssh_cert: "../cert/ssh.pem"
+    vnet: "clustervnet"
+    ip: "172.16.1.11"
+    reserved_ip: "cluster-01-ip"
+    custom_data: "../conf/coreos/cluster-01.yaml"

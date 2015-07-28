@@ -1,0 +1,284 @@
+#cloud-config
+
+ssh_authorized_keys:
+  - ssh-rsa ###KEY###
+
+hostname: ded-prd-01
+
+write_files:
+  - path: /etc/weave.env
+    permissions: 0644
+    owner: root
+    content: |
+      WEAVE_PASSWORD="PASSWORD"
+      WEAVE_BREAKOUT_ROUTE="10.1.0.0/16"
+      WEAVE_IPRANGE="10.2.0.1/16"
+
+  - path: /etc/weave.ded-prd-01.env
+    permissions: 0644
+    owner: root
+    content: |
+      WEAVE_PEERS="cluster-01.cloudapp.net"
+      WEAVE_BRIDGE_ADDRESS="10.1.0.1/16"
+
+  - path: /etc/kubernetes.env
+    permissions: 0644
+    owner: root
+    content: |
+      KUBE_RELEASE_TARBALL=https://github.com/GoogleCloudPlatform/kubernetes/releases/download/v1.0.1/kubernetes.tar.gz
+
+  - path: /opt/bin/wupiao
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # [w]ait [u]ntil [p]ort [i]s [a]ctually [o]pen
+      [ -n "$1" ] && \
+        until curl -o /dev/null -sIf http://${1}; do \
+          sleep 1 && echo .;
+        done;
+      exit $?
+
+  - path: /var/lib/kubelet/.dockercfg
+    owner: core:core
+    permissions: '0644'
+    content: |
+      {
+        "quay.io": {
+          "auth": "==KEY==",
+          "email": ""
+        }
+      }
+
+  - path: /home/core/.dockercfg
+    owner: core:core
+    permissions: '0600'
+    content: |
+      {
+        "quay.io": {
+          "auth": "==KEY==",
+          "email": ""
+        }
+      }
+
+coreos:
+  update:
+    group: beta
+    reboot-strategy: off
+
+  units:
+    - name: systemd-networkd-wait-online.service
+      drop-ins:
+        - name: 50-check-github-is-reachable.conf
+          content: |
+            [Service]
+            ExecStart=/bin/sh -x -c \
+              'until curl --silent --fail https://status.github.com/api/status.json | grep -q \"good\"; do sleep 2; done'
+
+    # WEAVE
+    - name: weave-network.target
+      enable: true
+      content: |
+        [Unit]
+        Description=Weave
+        Documentation=man:systemd.special(7)
+        RefuseManualStart=no
+        After=network-online.target
+        Requires=install-weave.service weave-create-bridge.service weave.service
+        Requires=weavedns.service weaveproxy.service
+        [Install]
+        WantedBy=multi-user.target
+        WantedBy=kubernetes.node.target
+
+    - name: 10-weave.network
+      runtime: false
+      content: |
+        [Match]
+        Type=bridge
+        Name=weave*
+        [Network]
+
+    - name: install-weave.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Install Weave
+        Documentation=http://docs.weave.works/
+        Before=weave.service
+        After=network-online.target docker.service
+        Requires=network-online.target docker.service
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStartPre=/bin/mkdir -p /opt/bin/
+        ExecStartPre=/usr/bin/wget -O /opt/bin/weave \
+          https://github.com/weaveworks/weave/releases/download/latest_release/weave
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/weave
+        ExecStartPre=/opt/bin/weave --local setup
+        ExecStart=/bin/echo Weave Installed
+        [Install]
+        WantedBy=weave-network.target
+
+    - name: weave-create-bridge.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Weave Create Bridge
+        Documentation=http://docs.weave.works/
+        Before=weave.service
+        After=install-weave.service
+        Requires=install-weave.service
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        EnvironmentFile=/etc/weave.%H.env
+        ExecStart=/opt/bin/weave --local create-bridge
+        # Workaround for rebooting
+        ExecStart=/bin/bash -c '/usr/bin/ip addr add dev weave $WEAVE_BRIDGE_ADDRESS || /bin/true'
+        ExecStart=/bin/bash -c '/usr/bin/ip route add $WEAVE_BREAKOUT_ROUTE dev weave scope link || /bin/true'
+        # Multicast routing
+        ExecStart=/bin/bash -c '/usr/bin/ip route add 224.0.0.0/4 dev weave || /bin/true'
+        [Install]
+        WantedBy=weave-network.target
+
+    # http://docs.weave.works/weave/latest_release/features.html
+    - name: weave.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Weave Net
+        Documentation=http://docs.weave.works/
+        After=docker.service install-weave.service
+        Requires=docker.service install-weave.service
+        [Service]
+        TimeoutStartSec=0
+        EnvironmentFile=-/etc/weave.env
+        EnvironmentFile=-/etc/weave.%H.env
+        ExecStartPre=/opt/bin/weave launch -iprange $WEAVE_IPRANGE $WEAVE_PEERS
+        ExecStart=/usr/bin/docker attach weave
+        Restart=on-failure
+        ExecStop=/opt/bin/weave stop
+        [Install]
+        WantedBy=weave-network.target
+
+    # http://docs.weave.works/weave/latest_release/weavedns.html
+    - name: weavedns.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Weave Run - DNS
+        Documentation=http://docs.weave.works/
+        After=weave.service
+        Requires=weave.service
+        [Service]
+        TimeoutStartSec=0
+        EnvironmentFile=-/etc/weave.env
+        EnvironmentFile=-/etc/weave.%H.env
+        ExecStartPre=/opt/bin/weave launch-dns
+        ExecStart=/usr/bin/docker attach weavedns
+        Restart=on-failure
+        ExecStop=/opt/bin/weave stop-dns
+        [Install]
+        WantedBy=weave-network.target
+
+    # http://docs.weave.works/weave/latest_release/proxy.html
+    - name: weaveproxy.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Weave Run - PROXY
+        Documentation=http://docs.weave.works/
+        After=weavedns.service
+        Requires=weavedns.service
+        [Service]
+        TimeoutStartSec=0
+        EnvironmentFile=-/etc/weave.env
+        EnvironmentFile=-/etc/weave.%H.env
+        ExecStartPre=/opt/bin/weave launch-proxy --with-dns
+        ExecStart=/usr/bin/docker attach weaveproxy
+        Restart=on-failure
+        ExecStop=/opt/bin/weave stop-proxy
+        [Install]
+        WantedBy=weave-network.target
+
+    - name: kubernetes.node.target
+      enable: true
+      command: start
+      content: |
+        [Unit]
+        Description=Kubernetes Cluster Node
+        Documentation=http://kubernetes.io/
+        RefuseManualStart=no
+        ConditionHost=!azure-prd-01
+        After=weave-network.target etcd2.service
+        Requires=weave-network.target etcd2.service
+        Wants=kubernetes.download.service
+        Wants=kubernetes.proxy.service
+        Wants=kubernetes.kubelet.service
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: kubernetes.download.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Download Kubernetes Binaries
+        Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+        After=network-online.target systemd-networkd-wait-online.service
+        Requires=network-online.target systemd-networkd-wait-online.service
+        [Service]
+        EnvironmentFile=/etc/kubernetes.env
+        ExecStartPre=/bin/mkdir -p /opt/bin/
+        ExecStart=/bin/bash -c "curl --silent --location $KUBE_RELEASE_TARBALL | tar xzv -C /tmp/"
+        ExecStart=/bin/tar xzvf /tmp/kubernetes/server/kubernetes-server-linux-amd64.tar.gz -C /opt
+        ExecStartPost=/usr/bin/chmod o+rx -R /opt/kubernetes
+        ExecStartPost=/bin/ln -sf /opt/kubernetes/server/bin/kubectl /opt/bin/
+        ExecStartPost=/bin/rm -rf /tmp/kubernetes
+        RemainAfterExit=yes
+        Type=oneshot
+
+    # Kubernetes Node on azure-prd-##
+    - name: kubernetes.kubelet.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Kubernetes Kubelet
+        Documentation=http://kubernetes.io/
+        ConditionFileIsExecutable=/opt/kubernetes/server/bin/kubelet
+        After=kubernetes.download.service
+        Wants=kubernetes.download.service
+        [Service]
+        ExecStartPre=/bin/mkdir -p /etc/kubernetes/manifests/
+        ExecStart=/opt/kubernetes/server/bin/kubelet \
+            --address=0.0.0.0 \
+            --port=10250 \
+            --api-servers=http://10.1.0.1:8080 \
+            --logtostderr=true \
+            --config=/etc/kubernetes/manifests/ \
+            --register-node
+        # Hostname override allows refering kubelets on master by hostname
+        #    --hostname-override=%H \
+        #    --cluster-dns=10.1.0.3 \
+        #    --cluster-domain=kube.local \
+        Restart=always
+        RestartSec=10
+        [Install]
+        WantedBy=kubernetes.node.target
+
+    - name: kubernetes.proxy.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Kubernetes Proxy
+        Documentation=http://kubernetes.io/
+        ConditionFileIsExecutable=/opt/kubernetes/server/bin/kube-proxy
+        After=kubernetes.download.service
+        Wants=kubernetes.download.service
+        [Service]
+        ExecStart=/opt/kubernetes/server/bin/kube-proxy \
+             --master=http://10.1.0.1:8080 \
+             --logtostderr=true
+        Restart=always
+        RestartSec=10
+        [Install]
+        WantedBy=kubernetes.node.target
+

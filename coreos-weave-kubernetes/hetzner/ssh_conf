@@ -1,0 +1,14 @@
+Host *
+	User core
+	Compression yes
+	LogLevel FATAL
+	StrictHostKeyChecking no
+	UserKnownHostsFile /dev/null
+	IdentitiesOnly yes
+	IdentityFile ./cert/ssh.key
+
+
+Host ded-prd-01
+	Hostname 1.2.3.4
+	Port 22
+
