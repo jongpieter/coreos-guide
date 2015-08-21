@@ -1,7 +1,17 @@
-# Coreos-guides
+# CoreOS Weave Kubernetes
 
-This repository contains different parts of code that I publish with my [blog
-posts](http://pieterjong.wordpress.com)
+This repository contains the source code, and blog posts for deploying a
+multi-host cluster, with CoreOS, Weave and Kubernetes.
+
+For more information read the [blog posts](http://pieterjong.wordpress.com)
+
+## See the docs folder for more indepth information
+
+ - [Azure](docs/azure.md)
+ - [Azure Local SSD](docs/azure-local-ssd.md)
+ - [CoreOS](docs/coreos.md)
+ - [Kubernetes](docs/kubernetes.md)
+ - [Weave](docs/weave.md)
 
 ## Copyright
 

@@ -7,21 +7,34 @@ write_files:
     content: |
       WEAVE_PASSWORD="PASSWORD"
       WEAVE_BREAKOUT_ROUTE="10.1.0.0/16"
-      WEAVE_IPRANGE="10.2.0.1/16"
+
+  - path: /etc/weave.azure-prd-01.env
+    permissions: 0644
+    owner: root
+    content: |
+      WEAVE_PEERS=""
+      WEAVE_BRIDGE_ADDRESS="10.1.0.1/24"
+
+  - path: /etc/weave.azure-prd-02.env
+    permissions: 0644
+    owner: root
+    content: |
+      WEAVE_PEERS="azure-prd-01"
+      WEAVE_BRIDGE_ADDRESS="10.1.1.1/24"
 
   - path: /etc/weave.azure-prd-03.env
     permissions: 0644
     owner: root
     content: |
       WEAVE_PEERS="cluster-01.cloudapp.net"
-      WEAVE_BRIDGE_ADDRESS="10.1.0.3/16"
+      WEAVE_BRIDGE_ADDRESS="10.1.2.1/24"
 
   - path: /etc/weave.azure-prd-04.env
     permissions: 0644
     owner: root
     content: |
       WEAVE_PEERS="azure-prd-03"
-      WEAVE_BRIDGE_ADDRESS="10.1.0.4/16"
+      WEAVE_BRIDGE_ADDRESS="10.1.3.1/24"
 
   - path: /etc/kubernetes.env
     permissions: 0644
@@ -45,26 +58,44 @@ write_files:
     owner: root
     content: |
       ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
-      ETCD_INITIAL_CLUSTER="azure-prd-01=http://10.1.0.1:2380,azure-prd-02=http://10.1.0.2:2380,azure-prd-03=http://10.1.0.3:2380,azure-prd-04=http://10.1.0.4:2380"
+      ETCD_INITIAL_CLUSTER="azure-prd-01=http://10.1.0.1:2380,azure-prd-02=http://10.1.1.1:2380,azure-prd-03=http://10.1.2.1:2380,azure-prd-04=http://10.1.3.1:2380"
       ETCD_INITIAL_CLUSTER_STATE="new"
+
+  - path: /etc/etcd2.azure-prd-01.env
+    permissions: 0644
+    owner: root
+    content: |
+      ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.1.0.1:2380"
+      ETCD_LISTEN_PEER_URLS="http://10.1.0.1:2380,http://10.1.0.1:7001"
+      ETCD_LISTEN_CLIENT_URLS="http://10.1.0.1:2379,http://10.1.0.1:4001,http://127.0.0.1:2379"
+      ETCD_ADVERTISE_CLIENT_URLS="http://10.1.0.1:2379"
+
+  - path: /etc/etcd2.azure-prd-02.env
+    permissions: 0644
+    owner: root
+    content: |
+      ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.1.1.1:2380"
+      ETCD_LISTEN_PEER_URLS="http://10.1.1.1:2380,http://10.1.1.1:7001"
+      ETCD_LISTEN_CLIENT_URLS="http://10.1.1.1:2379,http://10.1.1.1:4001,http://127.0.0.1:2379"
+      ETCD_ADVERTISE_CLIENT_URLS="http://10.1.1.1:2379"
 
   - path: /etc/etcd2.azure-prd-03.env
     permissions: 0644
     owner: root
     content: |
-      ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.1.0.3:2380"
-      ETCD_LISTEN_PEER_URLS="http://10.1.0.3:2380,http://10.1.0.3:7001"
-      ETCD_LISTEN_CLIENT_URLS="http://10.1.0.3:2379,http://10.1.0.3:4001,http://127.0.0.1:2379"
-      ETCD_ADVERTISE_CLIENT_URLS="http://10.1.0.3:2379"
+      ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.1.2.1:2380"
+      ETCD_LISTEN_PEER_URLS="http://10.1.2.1:2380,http://10.1.2.1:7001"
+      ETCD_LISTEN_CLIENT_URLS="http://10.1.2.1:2379,http://10.1.2.1:4001,http://127.0.0.1:2379"
+      ETCD_ADVERTISE_CLIENT_URLS="http://10.1.2.1:2379"
 
   - path: /etc/etcd2.azure-prd-04.env
     permissions: 0644
     owner: root
     content: |
-      ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.1.0.4:2380"
-      ETCD_LISTEN_PEER_URLS="http://10.1.0.4:2380,http://10.1.0.4:7001"
-      ETCD_LISTEN_CLIENT_URLS="http://10.1.0.4:2379,http://10.1.0.4:4001,http://127.0.0.1:2379"
-      ETCD_ADVERTISE_CLIENT_URLS="http://10.1.0.4:2379"
+      ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.1.3.1:2380"
+      ETCD_LISTEN_PEER_URLS="http://10.1.3.1:2380,http://10.1.3.1:7001"
+      ETCD_LISTEN_CLIENT_URLS="http://10.1.3.1:2379,http://10.1.3.1:4001,http://127.0.0.1:2379"
+      ETCD_ADVERTISE_CLIENT_URLS="http://10.1.3.1:2379"
 
   - path: /var/lib/kubelet/.dockercfg
     owner: core:core
@@ -122,7 +153,7 @@ coreos:
         - name: 10-overlayfs.conf
           content: |
             [Service]
-            Environment='DOCKER_OPTS="--storage-driver=overlay"'
+            Environment='DOCKER_OPTS=--storage-driver="overlay" --bridge="weave" -r="false"'
 
     - name: format-ephemeral.service
       command: start
@@ -170,7 +201,8 @@ coreos:
         RefuseManualStart=no
         After=network-online.target
         Requires=install-weave.service weave-create-bridge.service weave.service
-        Requires=weavedns.service weaveproxy.service
+        Requires=weavedns.service
+        #Requires=weaveproxy.service
         [Install]
         WantedBy=multi-user.target
         WantedBy=kubernetes.master.target
@@ -191,19 +223,22 @@ coreos:
         Description=Install Weave
         Documentation=http://docs.weave.works/
         Before=weave.service
-        After=network-online.target docker.service
-        Requires=network-online.target docker.service
+        After=network-online.target
+        Requires=network-online.target
         [Service]
         Type=oneshot
         RemainAfterExit=yes
         ExecStartPre=/bin/mkdir -p /opt/bin/
         ExecStartPre=/usr/bin/wget -O /opt/bin/weave \
           https://github.com/weaveworks/weave/releases/download/latest_release/weave
+        ExecStartPre=/usr/bin/wget -O /opt/bin/weave-helper \
+          https://raw.github.com/errordeveloper/weave-demos/master/poseidon/weave-helper
         ExecStartPre=/usr/bin/chmod +x /opt/bin/weave
-        ExecStartPre=/opt/bin/weave --local setup
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/weave-helper
         ExecStart=/bin/echo Weave Installed
         [Install]
         WantedBy=weave-network.target
+        WantedBy=weave.service
 
     - name: weave-create-bridge.service
       enable: true
@@ -211,12 +246,13 @@ coreos:
         [Unit]
         Description=Weave Create Bridge
         Documentation=http://docs.weave.works/
-        Before=weave.service
-        After=install-weave.service
-        Requires=install-weave.service
+        Before=weave.service docker.service
+        After=network.target install-weave.service
+        Requires=network.target install-weave.service
         [Service]
         Type=oneshot
         RemainAfterExit=yes
+        EnvironmentFile=-/etc/weave.env
         EnvironmentFile=/etc/weave.%H.env
         ExecStart=/opt/bin/weave --local create-bridge
         # Workaround for rebooting
@@ -224,6 +260,21 @@ coreos:
         ExecStart=/bin/bash -c '/usr/bin/ip route add $WEAVE_BREAKOUT_ROUTE dev weave scope link || /bin/true'
         # Multicast routing
         ExecStart=/bin/bash -c '/usr/bin/ip route add 224.0.0.0/4 dev weave || /bin/true'
+        [Install]
+        WantedBy=weave-network.target
+
+    - name: weave-helper.service
+      enable: true
+      content: |
+        [Unit]
+        Description=Weave Network Router
+        Documentation=http://docs.weave.works/
+        After=install-weave.service
+        After=docker.service
+        Requires=docker.service
+        Requires=install-weave.service
+        [Service]
+        ExecStart=/opt/bin/weave-helper
         [Install]
         WantedBy=weave-network.target
 
@@ -240,7 +291,8 @@ coreos:
         TimeoutStartSec=0
         EnvironmentFile=-/etc/weave.env
         EnvironmentFile=-/etc/weave.%H.env
-        ExecStartPre=/opt/bin/weave launch -iprange $WEAVE_IPRANGE $WEAVE_PEERS
+        ExecStartPre=/opt/bin/weave --local setup
+        ExecStartPre=/opt/bin/weave launch $WEAVE_PEERS
         ExecStart=/usr/bin/docker attach weave
         Restart=on-failure
         ExecStop=/opt/bin/weave stop
@@ -264,26 +316,6 @@ coreos:
         ExecStart=/usr/bin/docker attach weavedns
         Restart=on-failure
         ExecStop=/opt/bin/weave stop-dns
-        [Install]
-        WantedBy=weave-network.target
-
-    # http://docs.weave.works/weave/latest_release/proxy.html
-    - name: weaveproxy.service
-      enable: true
-      content: |
-        [Unit]
-        Description=Weave Run - PROXY
-        Documentation=http://docs.weave.works/
-        After=weavedns.service
-        Requires=weavedns.service
-        [Service]
-        TimeoutStartSec=0
-        EnvironmentFile=-/etc/weave.env
-        EnvironmentFile=-/etc/weave.%H.env
-        ExecStartPre=/opt/bin/weave launch-proxy --with-dns
-        ExecStart=/usr/bin/docker attach weaveproxy
-        Restart=on-failure
-        ExecStop=/opt/bin/weave stop-proxy
         [Install]
         WantedBy=weave-network.target
 
@@ -328,18 +360,21 @@ coreos:
         [Unit]
         Description=Download Kubernetes Binaries
         Documentation=https://github.com/GoogleCloudPlatform/kubernetes
-        After=network-online.target systemd-networkd-wait-online.service
-        Requires=network-online.target systemd-networkd-wait-online.service
+        After=network-online.target
+        Requires=network-online.target
         [Service]
         EnvironmentFile=/etc/kubernetes.env
         ExecStartPre=/bin/mkdir -p /opt/bin/
-        ExecStart=/bin/bash -c "curl --silent --location $KUBE_RELEASE_TARBALL | tar xzv -C /tmp/"
+        ExecStartPre=/bin/bash -c "curl --silent --location $KUBE_RELEASE_TARBALL | tar xzv -C /tmp/"
         ExecStart=/bin/tar xzvf /tmp/kubernetes/server/kubernetes-server-linux-amd64.tar.gz -C /opt
         ExecStartPost=/usr/bin/chmod o+rx -R /opt/kubernetes
         ExecStartPost=/bin/ln -sf /opt/kubernetes/server/bin/kubectl /opt/bin/
         ExecStartPost=/bin/rm -rf /tmp/kubernetes
         RemainAfterExit=yes
         Type=oneshot
+        [Install]
+        WantedBy=kubernetes.master.target
+        WantedBy=kubernetes.node.target
 
     # Kubernetes Master on azure-prd-01
     - name: kubernetes.apiserver.service
@@ -360,7 +395,7 @@ coreos:
             --kubelet-https=true \
             --secure-port=6443 \
             --service-cluster-ip-range=10.100.0.0/16 \
-            --etcd-servers=http://10.1.0.1:2379,http://10.1.0.2:2379 \
+            --etcd-servers=http://10.1.0.1:2379,http://10.1.1.1:2379 \
             --cloud-provider=vagrant \
             --logtostderr=true \
             --v=3
