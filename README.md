@@ -3,15 +3,18 @@
 This repository contains the source code, and blog posts for deploying a
 multi-host cluster, with CoreOS, Weave and Kubernetes.
 
-For more information read the [blog posts](http://pieterjong.wordpress.com)
+For more information read the blog posts on [http://yoin.io](http://yoin.io)
+
+All information is combined in the [Weave CoreOS Kubernetes Azure
+Post](http://yoin.io/infrastructure/2015/08/17/coreos-weave-kubernetes)
 
 ## See the docs folder for more indepth information
 
- - [Azure](docs/azure.md)
- - [Azure Local SSD](docs/azure-local-ssd.md)
- - [CoreOS](docs/coreos.md)
- - [Kubernetes](docs/kubernetes.md)
- - [Weave](docs/weave.md)
+ - [Azure](http://yoin.io/infrastructure/2015/08/07/azure)
+ - [Azure Local SSD](http://yoin.io/infrastructure/2015/08/17/azure-local-ssd)
+ - [CoreOS](http://yoin.io/2015/08/17/coreos)
+ - [Kubernetes](http://yoin.io/2015/08/17/kubernetes)
+ - [Weave](http://yoin.io/2015/08/19/weave)
 
 ## Copyright
 
